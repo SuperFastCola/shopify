@@ -1,0 +1,182 @@
+
+<script>
+
+(function(){
+	var checkIfjQueryLoaded = setInterval(checkForJquery,200);
+
+	function checkForJquery(){
+		// console.log("checkForJquery");
+		// console.log(typeof jQuery);
+		// console.log(typeof jQuery != "undefined");
+
+		if(typeof jQuery != "undefined"){
+			customizer.init();
+			clearInterval(checkIfjQueryLoaded);
+			checkIfjQueryLoaded = null;
+		}
+
+	}
+
+	var customizer = (function(){
+
+		var chooser = {};
+		chooser.prefs = {}; //user specified properties
+		chooser.prefs.top = null;
+		chooser.prefs.jeep = null;
+		chooser.prefs.scene = null;
+
+		chooser.top_colors = {{ collections.top-colors.products | json }};
+		chooser.jeep_colors =  {{ collections.jeep-colors.products | json }};
+
+		chooser.selectedkey = "";
+		chooser.products = {};
+		{% for variant in all_products.mytop-cover.variants %}
+			var key = "{{variant.option1 | downcase }}_{{variant.option2 | downcase }}_{{variant.option3 | downcase | remove: " "}}";
+			chooser.products[key] = {{variant | json }};
+		{% endfor %}
+		
+		chooser.addActions = function(){
+			$(".scene_navigation .scene_changer").on("click",chooser.changeScene);
+			$(".single-option-selector").on("change",chooser.changePicture);
+			$(".jumpstart-selector select").on("change",chooser.setSelectedOptions);
+			$(".swatch_top").on("click",chooser.changeTopColor);
+			$(".swatch_jeep").on("click",chooser.changeJeepColor);
+			$(".step_changer,.customizer_restart").on("click",chooser.stepChanger);
+			chooser.setSelectedKey();
+			chooser.setSelectedOptions();
+		}
+
+		chooser.setSelectedKey = function(){
+			
+			chooser.selectedkey = "";
+			var options = {};
+			$(".single-option-selector").each(function(index){
+				options[String(this.dataset.option)] = $(this).val();
+			});
+
+			for(var i in options){
+				options[i] = String(options[i]).toLowerCase();
+				options[i] = String(options[i]).replace(" ","");
+			}
+
+			chooser.selectedkey = options.option1 + "_" + options.option2 + "_" + options.option3;
+			console.log(chooser.selectedkey);
+		}
+
+		chooser.changePicture = function(e){
+			
+			chooser.setSelectedKey();
+
+			$(".jeep").addClass("loading");
+			$(".loader").removeClass("hidden");
+
+			var jeepImage = new Image();
+			jeepImage.src = chooser.products[chooser.selectedkey].featured_image.src;
+			jeepImage.addEventListener('load', function(){
+					$(".jeep").attr("src",this.src).removeClass("loading");
+					$(".loader").addClass("hidden");
+			});
+			console.log(chooser.products[chooser.selectedkey]);
+			chooser.setSelectedOptions();
+		}
+
+		chooser.searchSelect = function(selector,value){
+			$(String(selector + " option")).each(function(){
+				var pattern = new RegExp( String(value), 'i');
+				if(pattern.exec($(this).val())){
+					$(this).prop("selected",true);
+					$(String(selector)).trigger("change");
+				}
+			});
+
+			chooser.setSelectedOptions();
+		}
+
+		chooser.changeTopColor = function(e){
+			var topcolor = $(e.currentTarget).data("color");
+			chooser.searchSelect("select[data-option=option1]",topcolor);
+		}
+
+		chooser.changeJeepColor = function(e){
+			var jeepcolor = $(e.currentTarget).data("color");
+			chooser.searchSelect("select[data-option=option2]",jeepcolor);
+		}
+
+		chooser.stepChanger = function(e){
+			$(".step_changer").removeClass("selected");
+
+			var step = $(e.currentTarget).data("step");
+
+			if(!$(e.currentTarget).hasClass("step_changer")){
+				$(".step_changer:nth-child(1)").addClass("selected");
+			}
+
+			$(".navigation__picker").find("button[data-step=" + step + "]").addClass("selected");
+
+			$(".steps").addClass("hidden");
+			$(String(".steps." + step)).removeClass("hidden");
+		}
+
+		chooser.changeScene = function(e){
+			chooser.prefs.scene = String($(e.currentTarget).data("ref"));
+			$(".scene").removeClass("active");
+			$(String("." + chooser.prefs.scene)).addClass("active");
+		}
+
+		chooser.setSelectedOptions = function(){
+
+			var options = {};
+			var default_top_color = $("select[data-option=option1] option").filter(":selected").text();
+			var top_obj = chooser.findColorObject(chooser.top_colors,default_top_color);
+			$(".color_summary_top_color_image").attr("src",top_obj.images[0]);
+
+			options.top_color = String(top_obj.title).replace(/top(\s)?/i,"");
+			$(".color_summary_top_color p span").text(options.top_color);
+
+			var default_jeep_color = $("select[data-option=option2] option").filter(":selected").text();
+			var jeep_obj = chooser.findColorObject(chooser.jeep_colors,default_jeep_color);
+			$(".color_summary_jeep_color_image").attr("src",jeep_obj.images[0]);
+
+			options.jeep_color = String(jeep_obj.title).replace(/jeep(\s)?/i,"");
+			$(".color_summary_jeep_color p span").text(options.jeep_color);
+
+			options.door_type = $("select[data-option=option3] option").filter(":selected").text();
+			options.jeep_year = $("#jeepYear option").filter(":selected").text();
+			options.top_style = $("#topStyle option").filter(":selected").text();
+
+			if(options.jeep_year.match(/select\soption/i)){
+				options.jeep_year = "No Year Selected";
+			}
+
+			$(".my-top-specs").empty();
+			$(".my-top-specs").append("<span>" + options.jeep_year  + " " + options.door_type + "</span>");
+
+			if(!options.top_style.match(/select\soption/i)){
+				$(".my-top-specs").append("<span>" + options.top_style + "</span>");
+			}
+			$(".my-top-specs").append("<span>" + options.top_color + " Exterior</span>");
+			$(".sku-specs").text(chooser.products[chooser.selectedkey].sku);
+		}
+
+		chooser.findColorObject = function(target,value){
+			var pattern = new RegExp( String(value), 'i');
+			for(var i in target){
+				if(pattern.exec(target[i].title)){
+					return target[i];
+				}
+			}
+		}
+
+		chooser.init = function(settings){
+			console.log("chooser.init");
+			if(typeof settings=="undefined"){
+				var settings = {};
+			}
+
+			chooser.addActions();
+		};
+
+		return chooser;
+	})();
+})();
+</script>

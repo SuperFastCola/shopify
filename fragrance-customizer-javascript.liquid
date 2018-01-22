@@ -1,0 +1,222 @@
+
+<script>
+
+(function(){
+	var checkIfjQueryLoaded = setInterval(checkForJquery,200);
+
+	function checkForJquery(){
+		if(typeof jQuery != "undefined"){
+		  	clearInterval(checkIfjQueryLoaded);
+			checkIfjQueryLoaded = null;
+
+			{% if single_fragrance != nil %}
+				scentmaker.init({container:".scent_list", single_scent_selection: true});
+			{% else %}
+				scentmaker.init({container:".scent_list"});
+			{% endif %}
+		}
+	}
+
+	var scentmaker = (function(){
+
+		var scentometer = {};
+		scentometer.scents_objects = {};
+
+		{%- for scent in scent_categories -%}
+			scentometer.scents_objects["{{scent}}"] = {};
+			{%- for product in collections[scent].products -%}
+				  scentometer.scents_objects["{{scent}}"][{{product.id}}] = {
+				  	"id":"{{product.id}}",
+				  	"title":"{{product.title}}",
+				  	"description":"{{product.description | remove: "<p>" | remove: "</p>" | escape}}"
+				  };
+
+			{%- endfor -%}
+		{%- endfor -%}
+
+		scentometer.category = "women";
+
+		scentometer.buildScentCategories = function(category){
+
+			if(typeof category != "undefined"){
+				scentometer.category = category;
+			}
+			var target = scentometer.scents_objects[scentometer.category];
+			$(this.list_holder).empty();
+
+			for(var i in target){
+				$(this.list_holder).append('<div class="scent_description hidden ' + target[i].id + '"><p>' +  target[i].title + '</p><span>' +  target[i].description + '</span></div>');
+
+				$(this.list_holder).append('<div class="description_nav"><a class="add_scent" data-ref-id="' + target[i].id + '" data-ref-title="' + target[i].title + '">Add</a><a class="show_scent_description" data-ref-id="' + target[i].id + '">Show Info</a></div>');
+			}
+
+			$(".add_scent").on("click",this.addScent);
+			$(".show_scent_description").on("click",scentometer.showScentDescription);
+		};
+
+		scentometer.buildScentCategoriesDropdown = function(category){
+			var target = scentometer.scents_objects[category];
+			$(this.list_holder).find("option").each(function(){
+				$(this).remove();
+			});
+
+			if(typeof target != "undefined"){
+				$(this.list_holder).append('<option value="">Select a Fragrance</option>');
+				$(this.list_holder).show();
+
+				for(var i in target){
+					$(this.list_holder).append('<option value="' +target[i].title + '">' +target[i].title + '</option>');
+				}
+			}
+			else{
+				$(this.list_holder).hide();
+			}
+		};
+
+		scentometer.addScent = function(e){
+			var title = $(e.currentTarget).data("ref-title");
+			$(".scent_name").each(function(){
+				if(!this.value){
+					$(this).val(title);
+					return false;
+				}
+			});
+			scentometer.calculateTotals();
+		};
+
+		scentometer.calculateTotals = function(){
+			scentometer.totals = 0;
+
+			$(".scent_percentage_selectors").each(function(){
+				scentometer.totals += Number($(this).val());
+			});
+
+			$(".scent_totals_percent span").text(String(scentometer.totals) + "%");
+
+			var scent_value_name_found = $(".scent_name").filter(function(index){
+				if(String($(this).val()).match(/\w/)){
+					return true;
+				}
+			});
+
+			if(scentometer.totals>100 || scentometer.totals<100){
+				$(".scent_totals_warning").text("Please make sure your scent amounts total 100%");
+				$(".customizer-add-to-cart").prop("disabled",true);
+			}
+			else{
+				$(".scent_totals_warning").empty();
+
+				if(scent_value_name_found.length > 0){
+					console.log($(".customizer-add-to-cart").length);
+					$(".customizer-add-to-cart").prop("disabled",false);		
+				}
+				
+			}
+
+			scentometer.displayScentProperties();
+		}
+
+		scentometer.displayScentProperties = function(){
+			$(".mini-product-properties").empty();
+			$(".scent-properties").empty();
+			$(".percentage_name").each(function(index){
+				if(String($(this).find(".scent_name").val()).match(/\w/)){
+					var scent_prop = String($(this).find(".scent_percentage_selectors").val()) + "% " + $(this).find(".scent_name").val();
+					$(".mini-product-properties").append(scent_prop + "<br/>");
+					$(".scent-properties").append('<input type="hidden" name="properties[Scent ' + (index+1) + ']" value="' + scent_prop + '">');
+				}
+			});
+		}
+
+		scentometer.showScentMaker = function(){
+			$(".scent_maker, .start_customizer").toggleClass("hidden");
+			scentometer.resetAllScents();
+		}
+
+		scentometer.showScentDescription = function(e){
+			var target_id = $(e.currentTarget).data("ref-id");
+			$(".scent_description." + target_id).toggleClass("hidden");
+			var hidden = $(".scent_description." + target_id).hasClass("hidden");
+			if(hidden){
+				$(e.currentTarget).text("Show Info");
+			}
+			else{
+				$(e.currentTarget).text("Hide Info");
+			}
+
+		}
+
+		scentometer.addGeneralActions = function(e){
+			$(".scent_category").on("click",scentometer.changeCategory);
+			$(".scent_reset").on("click",scentometer.resetAction);
+			$(".scent_percentage_selectors").on("change",scentometer.calculateTotals);
+			$(".start_customizer").on("click",scentometer.showScentMaker);
+			$(".close-scent-maker").on("click",scentometer.showScentMaker);
+		};
+
+		scentometer.resetAction = function(e){
+			var scent_field = $(this).data("ref-scent-slot");
+			$(String("input.scent" + scent_field)).val("");
+			$(String("select.scent" + scent_field)).prop('selectedIndex',0);
+			scentometer.calculateTotals();
+		};
+
+		scentometer.resetAllScents = function(){
+			$(".percentage_name").each(function(){
+				$(String("input.scent_name")).val("");
+				$(String("select.scent_percentage_selectors")).prop('selectedIndex',0);
+			});			
+			scentometer.calculateTotals();
+		};
+
+		scentometer.changeCategory = function(e){
+
+			var singleOption = $(e.currentTarget).is("select");
+			var cat = null;
+			if(singleOption){
+				cat = $(e.currentTarget).val();
+				scentometer.buildScentCategoriesDropdown(cat);
+			}
+			else{
+				$(".scent_list").scrollTop(0);
+				$(".scent_category").removeClass("selected");
+				cat = $(e.currentTarget).data("ref");
+				$(e.currentTarget).addClass("selected");
+				scentometer.buildScentCategories(cat);
+			}
+
+			
+		};
+
+		scentometer.list_holder = null;
+		
+		scentometer.init = function(settings){
+
+			if(typeof settings=="undefined"){
+				var settings = {};
+			}
+
+			if(typeof settings.container != "undefined"){
+				scentometer.list_holder = $(settings.container);
+			}
+			else{
+				scentometer.list_holder = $(".scent_list");	
+			}
+
+			if(typeof settings.single_scent_selection != "undefined"){
+				$('.scent_category option').eq(0).prop('selected', true);
+				scentometer.buildScentCategoriesDropdown();
+				$(".scent_category").on("change",scentometer.changeCategory);
+			}
+			else{
+				scentometer.resetAllScents();
+				scentometer.addGeneralActions();
+				scentometer.buildScentCategories();	
+			}
+			
+		};
+
+		return scentometer;
+	})();
+})();
+</script>
